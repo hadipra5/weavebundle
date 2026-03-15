@@ -1,0 +1,8 @@
+homepage: "https://github.com/example/weavebundle"
+language: c++
+primary_contact: "oss-fuzz-maintainer@example.com"
+main_repo: "https://github.com/example/weavebundle"
+sanitizers:
+  - address
+fuzzing_engines:
+  - libfuzzer
