@@ -48,23 +48,50 @@ enable_testing()
 add_test(NAME weavebundle_tests COMMAND test_parser)
 
 if(WEAVEBUNDLE_ENABLE_FUZZING)
+  function(add_weavebundle_fuzzer target_name source_file)
+    add_executable(${target_name}
+      ${source_file}
+    )
+
+    target_link_libraries(${target_name} PRIVATE weavebundle)
+  endfunction()
+
   if(DEFINED ENV{LIB_FUZZING_ENGINE} AND NOT "$ENV{LIB_FUZZING_ENGINE}" STREQUAL "")
-    add_executable(fuzz_parser
-      fuzz/fuzz_parser.cpp
-    )
+    add_weavebundle_fuzzer(fuzz_parser fuzz/fuzz_parser.cpp)
+    add_weavebundle_fuzzer(fuzz_rle fuzz/fuzz_rle.cpp)
+    add_weavebundle_fuzzer(fuzz_section fuzz/fuzz_section.cpp)
+    add_weavebundle_fuzzer(fuzz_footer fuzz/fuzz_footer.cpp)
 
-    target_link_libraries(fuzz_parser PRIVATE weavebundle "$ENV{LIB_FUZZING_ENGINE}")
+    target_link_libraries(fuzz_parser PRIVATE "$ENV{LIB_FUZZING_ENGINE}")
+    target_link_libraries(fuzz_rle PRIVATE "$ENV{LIB_FUZZING_ENGINE}")
+    target_link_libraries(fuzz_section PRIVATE "$ENV{LIB_FUZZING_ENGINE}")
+    target_link_libraries(fuzz_footer PRIVATE "$ENV{LIB_FUZZING_ENGINE}")
+
     target_compile_options(fuzz_parser PRIVATE -fsanitize=address)
-    target_link_options(fuzz_parser PRIVATE -fsanitize=address)
-  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    add_executable(fuzz_parser
-      fuzz/fuzz_parser.cpp
-    )
+    target_compile_options(fuzz_rle PRIVATE -fsanitize=address)
+    target_compile_options(fuzz_section PRIVATE -fsanitize=address)
+    target_compile_options(fuzz_footer PRIVATE -fsanitize=address)
 
-    target_link_libraries(fuzz_parser PRIVATE weavebundle)
+    target_link_options(fuzz_parser PRIVATE -fsanitize=address)
+    target_link_options(fuzz_rle PRIVATE -fsanitize=address)
+    target_link_options(fuzz_section PRIVATE -fsanitize=address)
+    target_link_options(fuzz_footer PRIVATE -fsanitize=address)
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    add_weavebundle_fuzzer(fuzz_parser fuzz/fuzz_parser.cpp)
+    add_weavebundle_fuzzer(fuzz_rle fuzz/fuzz_rle.cpp)
+    add_weavebundle_fuzzer(fuzz_section fuzz/fuzz_section.cpp)
+    add_weavebundle_fuzzer(fuzz_footer fuzz/fuzz_footer.cpp)
+
     target_compile_options(fuzz_parser PRIVATE -fsanitize=fuzzer,address)
+    target_compile_options(fuzz_rle PRIVATE -fsanitize=fuzzer,address)
+    target_compile_options(fuzz_section PRIVATE -fsanitize=fuzzer,address)
+    target_compile_options(fuzz_footer PRIVATE -fsanitize=fuzzer,address)
+
     target_link_options(fuzz_parser PRIVATE -fsanitize=fuzzer,address)
+    target_link_options(fuzz_rle PRIVATE -fsanitize=fuzzer,address)
+    target_link_options(fuzz_section PRIVATE -fsanitize=fuzzer,address)
+    target_link_options(fuzz_footer PRIVATE -fsanitize=fuzzer,address)
   else()
-    message(STATUS "Skipping fuzz_parser: use upstream LLVM clang or provide LIB_FUZZING_ENGINE.")
+    message(STATUS "Skipping fuzz targets: use upstream LLVM clang or provide LIB_FUZZING_ENGINE.")
   endif()
 endif()

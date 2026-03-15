@@ -177,8 +177,11 @@ ctest --test-dir build --output-on-failure
 cmake -S . -B build-fuzz \
   -DCMAKE_CXX_COMPILER=clang++ \
   -DWEAVEBUNDLE_ENABLE_FUZZING=ON
-cmake --build build-fuzz --target fuzz_parser
+cmake --build build-fuzz --target fuzz_parser fuzz_rle fuzz_section fuzz_footer
 ./build-fuzz/fuzz_parser -max_len=4096 ./examples/sample.wvbf
+./build-fuzz/fuzz_rle -max_len=4096 ./examples/sample.wvbf
+./build-fuzz/fuzz_section -max_len=4096 ./examples/sample.wvbf
+./build-fuzz/fuzz_footer -max_len=4096 ./examples/sample.wvbf
 ```
 
 On macOS, AppleClang often lacks the libFuzzer runtime. In that case, use an upstream LLVM toolchain, for example:
@@ -187,8 +190,11 @@ On macOS, AppleClang often lacks the libFuzzer runtime. In that case, use an ups
 cmake -S . -B build-fuzz \
   -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
   -DWEAVEBUNDLE_ENABLE_FUZZING=ON
-cmake --build build-fuzz --target fuzz_parser
+cmake --build build-fuzz --target fuzz_parser fuzz_rle fuzz_section fuzz_footer
 ./build-fuzz/fuzz_parser -max_len=4096 ./examples/sample.wvbf
+./build-fuzz/fuzz_rle -max_len=4096 ./examples/sample.wvbf
+./build-fuzz/fuzz_section -max_len=4096 ./examples/sample.wvbf
+./build-fuzz/fuzz_footer -max_len=4096 ./examples/sample.wvbf
 ```
 
 If you want to force sanitizer coverage flags explicitly in a local build:
@@ -199,7 +205,7 @@ cmake -S . -B build-fuzz \
   -DCMAKE_CXX_FLAGS="-fsanitize=fuzzer,address" \
   -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=fuzzer,address" \
   -DWEAVEBUNDLE_ENABLE_FUZZING=ON
-cmake --build build-fuzz --target fuzz_parser
+cmake --build build-fuzz --target fuzz_parser fuzz_rle fuzz_section fuzz_footer
 ```
 
 ## Running the example parser
@@ -214,7 +220,10 @@ cmake --build build-fuzz --target fuzz_parser
 - Recursive child sections and nested record values create deep parser states.
 - The optional compressed payload path exercises heap allocation and decompression logic.
 - Checksum-gated sections give the fuzzer both reject and accept paths to explore.
-- The fuzz target parses raw inputs directly and also wraps arbitrary bytes into a structurally valid container to improve coverage.
+- `fuzz_parser` parses raw inputs directly and also wraps arbitrary bytes into a structurally valid container to improve coverage.
+- `fuzz_rle` concentrates on compressed payload length handling and decompression paths.
+- `fuzz_section` concentrates on nested section, record, and recursive parsing paths.
+- `fuzz_footer` concentrates on optional footer blobs and trailing section data.
 
 ## OSS-Fuzz integration
 
