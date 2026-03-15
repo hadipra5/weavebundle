@@ -10,6 +10,8 @@
 namespace weavebundle {
 namespace fuzzing {
 
+constexpr std::size_t kMaxFuzzInputSize = 4096;
+
 inline void AppendU8(std::vector<std::uint8_t>* out, std::uint8_t value) {
   out->push_back(value);
 }
@@ -41,6 +43,21 @@ inline std::uint16_t Bounded16(const std::uint8_t* data,
   const std::uint16_t value = static_cast<std::uint16_t>(data[index]) |
                               (static_cast<std::uint16_t>(data[index + 1U]) << 8U);
   return modulus == 0 ? value : static_cast<std::uint16_t>(value % modulus);
+}
+
+inline bool ShouldSkipInput(std::size_t size) {
+  return size > kMaxFuzzInputSize;
+}
+
+inline bool ShouldUseRawPath(const std::uint8_t* data, std::size_t size) {
+  if (size == 0) {
+    return false;
+  }
+  return (data[0] % 10U) < 3U;
+}
+
+inline std::uint8_t SelectFlags(std::uint8_t candidate, std::uint8_t allowed_mask, std::uint8_t required_mask) {
+  return static_cast<std::uint8_t>((candidate & allowed_mask) | required_mask);
 }
 
 inline std::vector<std::uint8_t> MakeSection(std::uint8_t type,

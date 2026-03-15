@@ -25,6 +25,10 @@ cp build/fuzz_parser "$OUT/"
 cp build/fuzz_rle "$OUT/"
 cp build/fuzz_section "$OUT/"
 cp build/fuzz_footer "$OUT/"
+cp fuzz/fuzz_parser.dict "$OUT/"
+cp fuzz/fuzz_rle.dict "$OUT/"
+cp fuzz/fuzz_section.dict "$OUT/"
+cp fuzz/fuzz_footer.dict "$OUT/"
 
 mkdir -p $OUT/fuzz_parser_seed_corpus
 cp examples/*.wvbf $OUT/fuzz_parser_seed_corpus/

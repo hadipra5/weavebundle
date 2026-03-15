@@ -224,6 +224,17 @@ cmake --build build-fuzz --target fuzz_parser fuzz_rle fuzz_section fuzz_footer
 - `fuzz_rle` concentrates on compressed payload length handling and decompression paths.
 - `fuzz_section` concentrates on nested section, record, and recursive parsing paths.
 - `fuzz_footer` concentrates on optional footer blobs and trailing section data.
+- Each target caps input processing at 4096 bytes to keep allocations and decompression work fuzz-efficient.
+- Raw parsing is only exercised on roughly 30% of executions; the remaining runs bias toward structured containers.
+
+## Dictionaries
+
+Target-specific dictionaries are included in [`fuzz/`](fuzz) and are copied by [`oss-fuzz/build.sh`](oss-fuzz/build.sh):
+
+- `fuzz_parser.dict`
+- `fuzz_rle.dict`
+- `fuzz_section.dict`
+- `fuzz_footer.dict`
 
 ## OSS-Fuzz integration
 
