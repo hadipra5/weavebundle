@@ -19,6 +19,24 @@ This makes it a good fuzzing target because a single input can drive deep contro
 
 This repository is intended as a safe fuzzing target template. It is intentionally parser-complex and sanitizer-friendly, but it does not seed known memory corruption vulnerabilities on purpose.
 
+## Threat Model
+
+The parser assumes every byte of input is attacker-controlled. A hostile input may contain malformed headers, inconsistent length fields, invalid checksums, truncated nested sections, malformed records, oversized compressed payloads, or deliberately chosen flag combinations intended to stress edge cases in allocation, bounds checking, recursion, and decompression logic.
+
+The security goal is to handle those cases without memory corruption, out-of-bounds access, integer-overflow-driven misbehavior, or excessive parsing work that would make fuzzing less effective.
+
+## Security goals
+
+WeaveBundle is intentionally designed to exercise common parser risk patterns:
+
+- multiple independent length fields
+- recursive section structures
+- variable-length metadata blocks
+- optional compression
+- checksummed data boundaries
+
+These features mimic real-world container formats that historically produce memory-safety bugs when fuzzed, while still keeping the codebase small enough to audit and integrate into OSS-Fuzz quickly.
+
 ## Repository layout
 
 ```text
@@ -30,7 +48,15 @@ This repository is intended as a safe fuzzing target template. It is intentional
 │   ├── parse_example.cpp
 │   └── sample.wvbf
 ├── fuzz
-│   └── fuzz_parser.cpp
+│   ├── fuzz_footer.cpp
+│   ├── fuzz_footer.dict
+│   ├── fuzz_helpers.h
+│   ├── fuzz_parser.cpp
+│   ├── fuzz_parser.dict
+│   ├── fuzz_rle.cpp
+│   ├── fuzz_rle.dict
+│   ├── fuzz_section.cpp
+│   └── fuzz_section.dict
 ├── include
 │   └── weavebundle
 │       └── parser.h
@@ -226,6 +252,15 @@ cmake --build build-fuzz --target fuzz_parser fuzz_rle fuzz_section fuzz_footer
 - `fuzz_footer` concentrates on optional footer blobs and trailing section data.
 - Each target caps input processing at 4096 bytes to keep allocations and decompression work fuzz-efficient.
 - Raw parsing is only exercised on roughly 30% of executions; the remaining runs bias toward structured containers.
+
+## Fuzzing Strategy
+
+- Raw fuzzing: each target still exercises direct `ParseContainer(data, size)` on a smaller share of runs so header-validation and error-handling paths remain reachable.
+- Structured container fuzzing: most executions wrap arbitrary bytes into partially valid `WVBF` containers so the fuzzer spends more time in deep parsing logic instead of failing at the magic header.
+- Targeted RLE fuzzing: `fuzz_rle` focuses mutation energy on compressed payload headers, run-length pairs, declared output sizes, and footer-adjacent parsing.
+- Recursive section fuzzing: `fuzz_section` drives nested sections, child counts, record payloads, and section-flag combinations that influence optional fields and recursion.
+- Footer and trailer fuzzing: `fuzz_footer` emphasizes optional names, footer blobs, and opaque trailing bytes that are easy to under-exercise in a single generic target.
+- Guided mutation: target-specific dictionaries and exposed flag bits help libFuzzer discover valid structural states more quickly.
 
 ## Dictionaries
 
