@@ -1,11 +1,11 @@
 #include "weavebundle/parser.h"
-#include "fuzz_helpers.h"
+#include "fuzz_builders.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <vector>
 
-namespace {
+namespace weavebundle::fuzzing {
 
 std::vector<std::uint8_t> MakeFooterContainer(const std::uint8_t* data, std::size_t size) {
   std::vector<std::uint8_t> section_body;
@@ -22,7 +22,11 @@ std::vector<std::uint8_t> MakeFooterContainer(const std::uint8_t* data, std::siz
 
   const std::uint16_t attr_len =
       static_cast<std::uint16_t>(weavebundle::fuzzing::Bounded16(data, size, 0, 16, 4));
-  weavebundle::fuzzing::AppendU16(&section_body, attr_len);
+  // A valid TLV lets this target actually reach the footer/trailer. Malformed
+  // attribute blocks remain covered by raw WVBF inputs.
+  weavebundle::fuzzing::AppendU16(&section_body, static_cast<std::uint16_t>(attr_len + 2U));
+  weavebundle::fuzzing::AppendU8(&section_body, 1);
+  weavebundle::fuzzing::AppendU8(&section_body, static_cast<std::uint8_t>(attr_len));
   for (std::uint16_t i = 0; i < attr_len; ++i) {
     weavebundle::fuzzing::AppendU8(
         &section_body, weavebundle::fuzzing::ByteAt(data, size, 2U + i, static_cast<std::uint8_t>(i)));
@@ -54,8 +58,9 @@ std::vector<std::uint8_t> MakeFooterContainer(const std::uint8_t* data, std::siz
   return weavebundle::fuzzing::MakeContainer({section}, 2, global_flags, 0x464f4f54U);
 }
 
-}  // namespace
+}  // namespace weavebundle::fuzzing
 
+#ifndef WEAVEBUNDLE_FUZZ_BUILDERS_ONLY
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
   if (weavebundle::fuzzing::ShouldSkipInput(size)) {
     return 0;
@@ -64,7 +69,8 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
   if (weavebundle::fuzzing::ShouldUseRawPath(data, size)) {
     weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(data, size));
   } else {
-    weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(MakeFooterContainer(data, size)));
+    weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(weavebundle::fuzzing::MakeFooterContainer(data, size)));
   }
   return 0;
 }
+#endif

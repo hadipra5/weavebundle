@@ -1,6 +1,6 @@
 # WeaveBundle
 
-WeaveBundle is a small C++ library for parsing a deliberately rich binary container format called `WVBF` (WeaveBundle Format). The format is designed to be realistic enough for parser-hardening work while staying compact enough to audit, fuzz, and integrate into OSS-Fuzz quickly.
+WeaveBundle is a small C++ library for parsing a deliberately rich binary container format called `WVBF` (WeaveBundle Format). This is an experimental parser-hardening and fuzzing project, not a production storage standard.
 
 The parser accepts untrusted binary input and exercises:
 
@@ -15,9 +15,13 @@ The parser accepts untrusted binary input and exercises:
 
 This makes it a good fuzzing target because a single input can drive deep control flow, repeated length parsing, recursive structure handling, and heap-backed decoding logic.
 
-## Security note
+## Project status and security
 
-This repository is intended as a safe fuzzing target template. It is intentionally parser-complex and sanitizer-friendly, but it does not seed known memory corruption vulnerabilities on purpose.
+The earlier [OSS-Fuzz submission](https://github.com/google/oss-fuzz/pull/15158) was closed: the reviewer considered the target insufficiently mature and recommended [ClusterFuzzLite](https://google.github.io/clusterfuzzlite/). This repository now includes a ClusterFuzzLite configuration; this is not acceptance into OSS-Fuzz, endorsement by Google, or evidence that Google uses this library.
+
+The parser has per-section and per-payload limits of 1 MiB and a nesting-depth limit of 8 below the root. These are **not** a cumulative document memory/CPU budget. Do not expose the parser directly to unbounded production uploads; apply input-size, memory, and execution-time limits externally. Checksums detect accidental changes, not malicious tampering. Passing tests or a short fuzz run does not establish security.
+
+See [readiness notes](docs/READINESS.md) for verified fixes, test scope, and remaining work.
 
 ## Threat Model
 
@@ -35,41 +39,18 @@ WeaveBundle is intentionally designed to exercise common parser risk patterns:
 - optional compression
 - checksummed data boundaries
 
-These features mimic real-world container formats that historically produce memory-safety bugs when fuzzed, while still keeping the codebase small enough to audit and integrate into OSS-Fuzz quickly.
+These features mimic real-world container formats that historically produce memory-safety bugs when fuzzed, while keeping the codebase small enough to inspect.
 
 ## Repository layout
 
-```text
-.
-├── CMakeLists.txt
-├── LICENSE
-├── README.md
-├── examples
-│   ├── parse_example.cpp
-│   └── sample.wvbf
-├── fuzz
-│   ├── fuzz_footer.cpp
-│   ├── fuzz_footer.dict
-│   ├── fuzz_helpers.h
-│   ├── fuzz_parser.cpp
-│   ├── fuzz_parser.dict
-│   ├── fuzz_rle.cpp
-│   ├── fuzz_rle.dict
-│   ├── fuzz_section.cpp
-│   └── fuzz_section.dict
-├── include
-│   └── weavebundle
-│       └── parser.h
-├── oss-fuzz
-│   ├── build.sh
-│   ├── Dockerfile
-│   └── project.yaml
-├── src
-│   ├── parser.cpp
-│   └── parser.h
-└── tests
-    └── test_parser.cpp
-```
+- `include/weavebundle/parser.h`: public C++17 API
+- `src/`: parser implementation
+- `tests/`: parser, bounds, and structured-harness regression tests
+- `fuzz/`: four libFuzzer targets, testable builders, and dictionaries
+- `.clusterfuzzlite/`: local-source container build integration
+- `.github/workflows/`: build/test and pull-request fuzzing configurations
+- `oss-fuzz/`: upstream build recipe retained for future evaluation
+- `scripts/test-linux.sh`: bounded Linux fuzzing and parser-coverage report
 
 ## WVBF format specification
 
@@ -197,42 +178,44 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+### Sanitized tests
+
+Tests remain active in Debug, Release, and RelWithDebInfo builds.
+
+```bash
+cmake -S . -B build-sanitized -DCMAKE_BUILD_TYPE=Debug \
+  -DWEAVEBUNDLE_ENABLE_ASAN=ON -DWEAVEBUNDLE_ENABLE_UBSAN=ON
+cmake --build build-sanitized --parallel 2
+UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-sanitized --output-on-failure
+```
+
 ### Local fuzzing build
 
-```bash
-cmake -S . -B build-fuzz \
-  -DCMAKE_CXX_COMPILER=clang++ \
-  -DWEAVEBUNDLE_ENABLE_FUZZING=ON
-cmake --build build-fuzz --target fuzz_parser fuzz_rle fuzz_section fuzz_footer
-./build-fuzz/fuzz_parser -max_len=4096 ./examples/sample.wvbf
-./build-fuzz/fuzz_rle -max_len=4096 ./examples/sample.wvbf
-./build-fuzz/fuzz_section -max_len=4096 ./examples/sample.wvbf
-./build-fuzz/fuzz_footer -max_len=4096 ./examples/sample.wvbf
-```
-
-On macOS, AppleClang often lacks the libFuzzer runtime. In that case, use an upstream LLVM toolchain, for example:
+Use upstream LLVM Clang with its libFuzzer runtime. The build instruments **both the parser and harnesses** with libFuzzer coverage, ASan, and UBSan.
 
 ```bash
-cmake -S . -B build-fuzz \
-  -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
-  -DWEAVEBUNDLE_ENABLE_FUZZING=ON
-cmake --build build-fuzz --target fuzz_parser fuzz_rle fuzz_section fuzz_footer
-./build-fuzz/fuzz_parser -max_len=4096 ./examples/sample.wvbf
-./build-fuzz/fuzz_rle -max_len=4096 ./examples/sample.wvbf
-./build-fuzz/fuzz_section -max_len=4096 ./examples/sample.wvbf
-./build-fuzz/fuzz_footer -max_len=4096 ./examples/sample.wvbf
+cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_CXX_COMPILER=clang++ -DWEAVEBUNDLE_ENABLE_FUZZING=ON
+cmake --build build-fuzz --parallel 2
+mkdir -p build-fuzz/corpus-parser
+cp examples/sample.wvbf build-fuzz/corpus-parser/
+UBSAN_OPTIONS=halt_on_error=1 ./build-fuzz/fuzz_parser \
+  build-fuzz/corpus-parser -dict=fuzz/fuzz_parser.dict \
+  -max_len=4096 -max_total_time=60 -rss_limit_mb=512
 ```
 
-If you want to force sanitizer coverage flags explicitly in a local build:
+Use a separate corpus directory for each target. Passing a single file instead of a directory only replays that file; it does not start a fuzz campaign.
+
+On macOS, use an upstream LLVM installation if AppleClang lacks libFuzzer (for example, set `CMAKE_CXX_COMPILER` to the `clang++` under `brew --prefix llvm`). An explicitly requested but unavailable fuzzing toolchain now fails configuration instead of silently omitting targets.
+
+For a bounded Linux run of all four targets with LLVM source coverage:
 
 ```bash
-cmake -S . -B build-fuzz \
-  -DCMAKE_CXX_COMPILER=clang++ \
-  -DCMAKE_CXX_FLAGS="-fsanitize=fuzzer,address" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=fuzzer,address" \
-  -DWEAVEBUNDLE_ENABLE_FUZZING=ON
-cmake --build build-fuzz --target fuzz_parser fuzz_rle fuzz_section fuzz_footer
+CXX=clang++-19 LLVM_PROFDATA=llvm-profdata-19 LLVM_COV=llvm-cov-19 \
+  FUZZ_SECONDS=60 bash scripts/test-linux.sh
 ```
+
+This runs one fuzzer at a time, limits each to 512 MiB RSS and five seconds per input, and leaves logs/corpora/coverage under a unique `build/fuzz-run-*` directory. Adjust the tool names to your installed LLVM version.
 
 ## Running the example parser
 
@@ -251,7 +234,7 @@ cmake --build build-fuzz --target fuzz_parser fuzz_rle fuzz_section fuzz_footer
 - `fuzz_section` concentrates on nested section, record, and recursive parsing paths.
 - `fuzz_footer` concentrates on optional footer blobs and trailing section data.
 - Each target caps input processing at 4096 bytes to keep allocations and decompression work fuzz-efficient.
-- Raw parsing is only exercised on roughly 30% of executions; the remaining runs bias toward structured containers.
+- Inputs beginning with `WVBF` always take the raw parser path so real corpus files are replayed faithfully. Other inputs select raw parsing via a first-byte modulo rule (roughly 30% for uniformly distributed bytes); the rest use structured builders.
 
 ## Fuzzing Strategy
 
@@ -271,16 +254,15 @@ Target-specific dictionaries are included in [`fuzz/`](fuzz) and are copied by [
 - `fuzz_section.dict`
 - `fuzz_footer.dict`
 
-## OSS-Fuzz integration
+## ClusterFuzzLite and OSS-Fuzz
 
-The [`oss-fuzz/Dockerfile`](oss-fuzz/Dockerfile), [`oss-fuzz/build.sh`](oss-fuzz/build.sh), and [`oss-fuzz/project.yaml`](oss-fuzz/project.yaml) files are ready to be copied into a new OSS-Fuzz project directory.
+The pull-request workflow builds the checked-out code using `.clusterfuzzlite/Dockerfile` and runs address/undefined sanitizer jobs through Google's open-source ClusterFuzzLite actions. No paid service, extra token, or corpus-storage repository is required by this configuration. GitHub Actions must be enabled, and workflows from outside contributors may need maintainer approval.
 
-Typical OSS-Fuzz submission flow:
+The shared build script honors the compiler instrumentation and fuzzing engine supplied by the environment and packages each seed corpus as `<target>_seed_corpus.zip`.
 
-1. Publish this repository on GitHub or another public host.
-2. Update [`oss-fuzz/project.yaml`](oss-fuzz/project.yaml) with the real repository URL and maintainer email.
-3. Copy the `oss-fuzz/` files into `google/oss-fuzz/projects/weavebundle/`.
-4. Open a pull request against the OSS-Fuzz repository.
+To validate the container end to end, use the official [ClusterFuzzLite build instructions](https://google.github.io/clusterfuzzlite/build-integration/) with an OSS-Fuzz helper checkout and a working Docker daemon. Ordinary local or VPS builds are not a substitute for that container validation.
+
+The `oss-fuzz/` recipe is retained for possible future submission. A working build alone is insufficient: [OSS-Fuzz eligibility](https://google.github.io/oss-fuzz/getting-started/accepting-new-projects/) also considers significant usage or importance to global infrastructure. Establish genuine use cases and downstream users first; do not present a synthetic fuzz target as an adopted production dependency.
 
 ## Example input
 

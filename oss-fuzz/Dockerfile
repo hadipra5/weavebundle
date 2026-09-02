@@ -9,11 +9,11 @@
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS.
 
-FROM gcr.io/oss-fuzz-base/base-builder
+FROM gcr.io/oss-fuzz-base/base-builder:v1
 
 RUN apt-get update && apt-get install -y cmake ninja-build && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/hadipra5/weavebundle.git $SRC/weavebundle
+RUN git clone https://github.com/yottt-1/weavebundle.git $SRC/weavebundle
 
 WORKDIR $SRC/weavebundle
 

@@ -53,6 +53,12 @@ inline bool ShouldUseRawPath(const std::uint8_t* data, std::size_t size) {
   if (size == 0) {
     return false;
   }
+  // Real WVBF corpus files start with 'W' (87), which never selected the old
+  // modulo-based raw path. Preserve corpus replay and dictionary-built files.
+  if (size >= 4 && data[0] == 'W' && data[1] == 'V' &&
+      data[2] == 'B' && data[3] == 'F') {
+    return true;
+  }
   return (data[0] % 10U) < 3U;
 }
 

@@ -1,5 +1,8 @@
 build/
 build-fuzz/
+build-*/
 out/
 *.o
 *.a
+*.profraw
+*.profdata

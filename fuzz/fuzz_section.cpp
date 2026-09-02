@@ -1,24 +1,22 @@
 #include "weavebundle/parser.h"
-#include "fuzz_helpers.h"
+#include "fuzz_builders.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <vector>
 
-namespace {
+namespace weavebundle::fuzzing {
 
 std::vector<std::uint8_t> MakeLeafBody(const std::uint8_t* data, std::size_t size, std::size_t offset) {
   std::vector<std::uint8_t> body;
   weavebundle::fuzzing::AppendU16(&body, 0);
-  weavebundle::fuzzing::AppendU16(&body, 0);
   weavebundle::fuzzing::AppendU16(&body, 1);
 
   std::vector<std::uint8_t> record_body;
+  weavebundle::fuzzing::AppendU32(&record_body, 0x01020304U);
   weavebundle::fuzzing::AppendU8(&record_body, 1);
   weavebundle::fuzzing::AppendU8(&record_body,
                                  weavebundle::fuzzing::ByteAt(data, size, offset, 0x11));
-  weavebundle::fuzzing::AppendU8(&record_body, 1);
-  weavebundle::fuzzing::AppendU8(&record_body, 0x90);
   weavebundle::fuzzing::AppendU8(&record_body, 1);
   weavebundle::fuzzing::AppendU8(&record_body,
                                  weavebundle::fuzzing::ByteAt(data, size, offset + 1U, 0x22));
@@ -91,8 +89,9 @@ std::vector<std::uint8_t> MakeSectionContainer(const std::uint8_t* data, std::si
   return weavebundle::fuzzing::MakeContainer({root}, 1, global_flags, 0x53454310U);
 }
 
-}  // namespace
+}  // namespace weavebundle::fuzzing
 
+#ifndef WEAVEBUNDLE_FUZZ_BUILDERS_ONLY
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
   if (weavebundle::fuzzing::ShouldSkipInput(size)) {
     return 0;
@@ -101,7 +100,8 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
   if (weavebundle::fuzzing::ShouldUseRawPath(data, size)) {
     weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(data, size));
   } else {
-    weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(MakeSectionContainer(data, size)));
+    weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(weavebundle::fuzzing::MakeSectionContainer(data, size)));
   }
   return 0;
 }
+#endif

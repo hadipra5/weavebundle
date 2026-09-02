@@ -1,11 +1,11 @@
 #include "weavebundle/parser.h"
-#include "fuzz_helpers.h"
+#include "fuzz_builders.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <vector>
 
-namespace {
+namespace weavebundle::fuzzing {
 
 std::vector<std::uint8_t> MakeRleContainer(const std::uint8_t* data, std::size_t size) {
   std::vector<std::uint8_t> section_body;
@@ -14,13 +14,20 @@ std::vector<std::uint8_t> MakeRleContainer(const std::uint8_t* data, std::size_t
 
   weavebundle::fuzzing::AppendU16(&section_body, 0);
   weavebundle::fuzzing::AppendU16(&section_body, 0);
-  weavebundle::fuzzing::AppendU16(&section_body, 0);
   weavebundle::fuzzing::AppendU8(&section_body, 2);
 
-  const std::uint32_t expected_output =
+  std::uint32_t expected_output =
       static_cast<std::uint32_t>(weavebundle::fuzzing::Bounded16(data, size, 0, 512, 16));
   const std::uint32_t compressed_len =
       size > 2 ? static_cast<std::uint32_t>(size - 2U) : 0U;
+  // Keep malformed-length exploration, but also reach successful expansion
+  // without requiring the fuzzer to guess the exact sum of every run.
+  if ((weavebundle::fuzzing::ByteAt(data, size, 0, 0) & 0x80U) != 0U) {
+    expected_output = 0;
+    for (std::size_t i = 2; i + 1 < size; i += 2) {
+      expected_output += data[i];
+    }
+  }
 
   weavebundle::fuzzing::AppendU32(&section_body, expected_output);
   weavebundle::fuzzing::AppendU32(&section_body, compressed_len);
@@ -45,8 +52,9 @@ std::vector<std::uint8_t> MakeRleContainer(const std::uint8_t* data, std::size_t
   return weavebundle::fuzzing::MakeContainer({section}, 1, global_flags, 0x524c4521U);
 }
 
-}  // namespace
+}  // namespace weavebundle::fuzzing
 
+#ifndef WEAVEBUNDLE_FUZZ_BUILDERS_ONLY
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
   if (weavebundle::fuzzing::ShouldSkipInput(size)) {
     return 0;
@@ -55,7 +63,8 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
   if (weavebundle::fuzzing::ShouldUseRawPath(data, size)) {
     weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(data, size));
   } else {
-    weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(MakeRleContainer(data, size)));
+    weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(weavebundle::fuzzing::MakeRleContainer(data, size)));
   }
   return 0;
 }
+#endif

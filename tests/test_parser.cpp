@@ -1,6 +1,6 @@
 #include "weavebundle/parser.h"
 
-#include <cassert>
+#include "check.h"
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -155,23 +155,24 @@ std::vector<std::uint8_t> MakeValidContainer() {
 int main() {
   std::vector<std::uint8_t> valid = MakeValidContainer();
   const weavebundle::ParseResult ok = weavebundle::ParseContainer(valid);
-  assert(ok.ok);
-  assert(ok.document.sections.size() == 1U);
-  assert(ok.document.sections[0].children.size() == 1U);
-  assert(ok.document.sections[0].payload.unpacked.size() == 4U);
-  assert(ok.document.sections[0].records.size() == 1U);
-  assert(ok.document.sections[0].records[0].children.size() == 1U);
+  CHECK(ok.ok);
+  CHECK(ok.document.sections.size() == 1U);
+  CHECK(ok.document.sections[0].children.size() == 1U);
+  CHECK(ok.document.sections[0].payload.unpacked.size() == 4U);
+  CHECK(ok.document.sections[0].records.size() == 1U);
+  CHECK(ok.document.sections[0].records[0].children.size() == 1U);
 
   valid[20] ^= 0xffU;
   const weavebundle::ParseResult bad_header = weavebundle::ParseContainer(valid);
-  assert(!bad_header.ok);
-  assert(bad_header.error.code == weavebundle::ErrorCode::kInvalidHeaderChecksum);
+  CHECK(!bad_header.ok);
+  CHECK(bad_header.error.code == weavebundle::ErrorCode::kInvalidHeaderChecksum);
 
   valid = MakeValidContainer();
   valid[0] = 'B';
   const weavebundle::ParseResult bad_magic = weavebundle::ParseContainer(valid);
-  assert(!bad_magic.ok);
-  assert(bad_magic.error.code == weavebundle::ErrorCode::kInvalidMagic);
+  CHECK(!bad_magic.ok);
+  CHECK(bad_magic.error.code == weavebundle::ErrorCode::kInvalidMagic);
 
+  std::cout << checks_run << " checks passed\n";
   return 0;
 }

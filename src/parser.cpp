@@ -195,24 +195,29 @@ bool ExpandRle(const std::vector<std::uint8_t>& compressed,
     return false;
   }
 
-  out->assign(expected_output_len, 0);
+  // Validate all run lengths before allocating attacker-declared output.
   std::size_t write_offset = 0;
   for (std::size_t i = 0; i < compressed.size(); i += 2) {
     const std::uint8_t run_len = compressed[i];
-    const std::uint8_t value = compressed[i + 1];
     if (write_offset > expected_output_len || expected_output_len - write_offset < run_len) {
       *error = {ErrorCode::kInvalidLength, offset + i, "RLE run exceeds declared output length"};
       return false;
     }
-    std::fill(out->begin() + static_cast<std::ptrdiff_t>(write_offset),
-              out->begin() + static_cast<std::ptrdiff_t>(write_offset + run_len),
-              value);
     write_offset += run_len;
   }
 
   if (write_offset != expected_output_len) {
     *error = {ErrorCode::kInvalidLength, offset, "Expanded payload does not match declared output length"};
     return false;
+  }
+
+  out->resize(expected_output_len);
+  write_offset = 0;
+  for (std::size_t i = 0; i < compressed.size(); i += 2) {
+    const std::uint8_t run_len = compressed[i];
+    std::fill_n(out->begin() + static_cast<std::ptrdiff_t>(write_offset),
+                run_len, compressed[i + 1]);
+    write_offset += run_len;
   }
 
   return true;
@@ -492,7 +497,7 @@ std::size_t Cursor::absolute_offset() const {
 }
 
 void Cursor::Advance(std::size_t amount) {
-  offset_ = std::min(size_, offset_ + amount);
+  offset_ += std::min(remaining(), amount);
 }
 
 std::uint32_t ComputeChecksum32(const std::uint8_t* data, std::size_t size) {

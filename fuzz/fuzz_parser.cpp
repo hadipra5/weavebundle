@@ -1,11 +1,11 @@
 #include "weavebundle/parser.h"
-#include "fuzz_helpers.h"
+#include "fuzz_builders.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <vector>
 
-namespace {
+namespace weavebundle::fuzzing {
 
 std::vector<std::uint8_t> MakeWrappedInput(const std::uint8_t* data, std::size_t size) {
   std::vector<std::uint8_t> record_body;
@@ -54,7 +54,7 @@ std::vector<std::uint8_t> MakeWrappedInput(const std::uint8_t* data, std::size_t
 
   weavebundle::fuzzing::AppendU16(&section_body, 1);
   weavebundle::fuzzing::AppendU8(&section_body, 0x30);
-  weavebundle::fuzzing::AppendU8(&section_body, 0x03);
+  weavebundle::fuzzing::AppendU8(&section_body, record_flags);
   weavebundle::fuzzing::AppendU16(&section_body, static_cast<std::uint16_t>(record_body.size()));
   section_body.insert(section_body.end(), record_body.begin(), record_body.end());
 
@@ -78,10 +78,6 @@ std::vector<std::uint8_t> MakeWrappedInput(const std::uint8_t* data, std::size_t
     section_body.insert(section_body.end(), data, data + payload_len);
   }
 
-  weavebundle::fuzzing::AppendU16(&section_body, 2);
-  weavebundle::fuzzing::AppendU8(&section_body, 0xaa);
-  weavebundle::fuzzing::AppendU8(&section_body, 0x55);
-
   if ((section_flags & 0x08U) != 0U) {
     weavebundle::fuzzing::AppendU16(&section_body, 0);
   }
@@ -102,8 +98,9 @@ std::vector<std::uint8_t> MakeWrappedInput(const std::uint8_t* data, std::size_t
   return weavebundle::fuzzing::MakeContainer({section}, 1, global_flags, 0x1337c0deU);
 }
 
-}  // namespace
+}  // namespace weavebundle::fuzzing
 
+#ifndef WEAVEBUNDLE_FUZZ_BUILDERS_ONLY
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
   if (weavebundle::fuzzing::ShouldSkipInput(size)) {
     return 0;
@@ -112,8 +109,9 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
   if (weavebundle::fuzzing::ShouldUseRawPath(data, size)) {
     weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(data, size));
   } else {
-    const std::vector<std::uint8_t> wrapped = MakeWrappedInput(data, size);
+    const std::vector<std::uint8_t> wrapped = weavebundle::fuzzing::MakeWrappedInput(data, size);
     weavebundle::fuzzing::ConsumeResult(weavebundle::ParseContainer(wrapped));
   }
   return 0;
 }
+#endif

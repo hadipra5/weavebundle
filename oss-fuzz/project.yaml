@@ -9,10 +9,10 @@
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS.
 
-homepage: "https://github.com/hadipra5/weavebundle"
+homepage: "https://github.com/yottt-1/weavebundle"
 language: c++
 primary_contact: "diemail.adi@gmail.com"
-main_repo: "https://github.com/hadipra5/weavebundle"
+main_repo: "https://github.com/yottt-1/weavebundle"
 auto_ccs:
   - "diemail.adi@gmail.com"
 sanitizers:
